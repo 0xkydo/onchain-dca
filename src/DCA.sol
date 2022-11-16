@@ -3,104 +3,140 @@
 pragma solidity ^0.8.0;
 pragma abicoder v2;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
 
-contract DCA is Ownable {
+contract DCA {
 
-    // Public Variables
-    address public immutable USDC;
-    address public immutable WETH9;
+    //////////////////////
+    // Public Variables //
+    //////////////////////
+
+    address public immutable baseTokenAddress;
+    address public immutable targetTokenAddress;
     address payable public immutable recipient;
+    uint256 public amount;
+    uint24 public immutable poolFee;
+    
+    uint256 public maxEpoch;
+    uint256 public currentEpoch;
 
     uint256 public immutable swapInterval;
     uint256 public swapTime;
 
-    IERC20 public immutable USDC_TOKEN;
-    IERC20 public immutable WETH9_TOKEN;
+    IERC20 public immutable BASE_TOKEN;
+    IERC20 public immutable TARGET_TOKEN;
 
     ISwapRouter public immutable swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-    uint256 public amount;
-    uint24 public constant poolFee = 500;
     
+
+    ///////////////////////
+    // Private Variables //
+    ///////////////////////
+
+    address payable private _fundingAddress;
     
-    // Events
-    event Construction(
+    ////////////
+    // Events //
+    ////////////
+
+    event DCACreated(
+        address recipient,
+        uint256 interval,
         uint256 amount,
-        address recipient
+        address baseTokenAddress,
+        address targetTokenAddress
     );
 
     event Swap(
+        address baseTokenAddress,
         uint256 amountIn,
-        uint256 amountOut
+        address targetTokenAddress,
+        uint256 amountOut,
+        address executedBy
     );
 
-    // Modifiers
+    ///////////////
+    // Modifiers //
+    ///////////////
+
     modifier canSwap{
         require(block.timestamp >= swapTime);
+        require(currentEpoch <= maxEpoch);
         _;
     }
 
     /*
-    * @notice Initiate contract with the base asset and router for the swapping function.
-    * @param _amount: amount of token to sell. NOTE: Uses 18 decimal as base.
-    * @param
-    * @param
-    * @param _interval: time interval between each DCA interval. Value input is in days.
+    * @notice initialize contract with the base asset and router for the swapping function.
+    * @param _amount: amount of token to sell.
+    * @param _baseToken: address of token you are selling for the target token.
+    * @param _targetToken: address of the token you are acquiring.
+    * @param _interval: time interval between each DCA interval.
     * @param _startNow: 0 or 1 value. 0 -> start in the next interval. 1 -> dca starting now.
-    * @param
+    * @param _recipient: address recieving the token from swaps.
+    * @param _funder: the address paying for the swap.
+    * @param _poolFee: the Uniswap pool you want to use for this pair.
+    * @param _maxEpoch: maximum number of the swaps one can do.
     */
     constructor(
         uint256 _amount,
-        address _USDC,
-        address _WETH9,
+        address _baseToken,
+        address _targetToken,
         uint256 _interval,
         uint8 _startNow,
-        address payable _recipient
+        address payable _recipient,
+        address payable _funder,
+        uint24 _poolFee,
+        uint256 _maxEpoch
     ){
-        // Initiate Token Addresses
-        USDC = _USDC;
-        WETH9 = _WETH9;
+        // initialize Token Addresses
+        baseTokenAddress = _baseToken;
+        targetTokenAddress = _targetToken;
 
-        // Initiate interval value
-        swapInterval = _interval * 60 * 60 * 24;
+        // initialize pool option
+        poolFee = _poolFee;
+
+        // initialize interval value
+        swapInterval = _interval;
         
-        // Initiate next swap time.
+        // initialize next swap time.
         swapTime = block.timestamp + (1 - _startNow) * swapInterval;
 
 
-        // Initate ERC20 tokens.
-        USDC_TOKEN = IERC20(USDC);
-        WETH9_TOKEN = IERC20(WETH9);
+        // initialize ERC20 tokens.
+        BASE_TOKEN = IERC20(baseTokenAddress);
+        TARGET_TOKEN = IERC20(targetTokenAddress);
 
-        // Initate DCA amount for each epoch.
-        amount = _amount * 10 ** 18; // NOTE: adds 18 0's. Might need to change later.
+        // initialize DCA amount for each epoch.
+        amount = _amount;
+        maxEpoch = _maxEpoch;
+        currentEpoch = 0;
         
         // Set reciever of token.
         recipient = _recipient;
+        _fundingAddress = _funder;
 
         // Approve DCA bot to interact with Uniswap router.
-        USDC_TOKEN.approve(address(swapRouter), USDC_TOKEN.totalSupply());
+        BASE_TOKEN.approve(address(swapRouter), BASE_TOKEN.totalSupply());
 
-        emit Construction(amount, recipient);
+        emit DCACreated(recipient, swapInterval, amount, baseTokenAddress, targetTokenAddress);
     }
 
     /*
-    * @notice swap asset from USDC to WETH
-    * @param amountMin The minimum amount of WETH output. NOTE: Need to be calculated offchain.
+    * @notice swap asset from base to target
+    * @param amountMin The minimum amount of target asset output. NOTE: Need to be calculated offchain.
     */
-    function swap(uint256 amountMin) public payable onlyOwner canSwap returns (uint256 amountOut) {
+    function swap(uint256 amountMin) public payable canSwap returns (uint256 amountOut) {
 
         // Transfer in base asset.
-        USDC_TOKEN.transferFrom(recipient, address(this), amount);
+        BASE_TOKEN.transferFrom(_fundingAddress, address(this), amount);
 
         // Execute Swap
         // https://docs.uniswap.org/protocol/guides/swaps/single-swaps
         ISwapRouter.ExactInputSingleParams memory params =
             ISwapRouter.ExactInputSingleParams({
-                tokenIn: USDC,
-                tokenOut: WETH9,
+                tokenIn: baseTokenAddress,
+                tokenOut: targetTokenAddress,
                 fee: poolFee,
                 recipient: recipient,
                 deadline: block.timestamp,
@@ -111,15 +147,33 @@ contract DCA is Ownable {
 
         amountOut = swapRouter.exactInputSingle(params);
 
-        emit Swap(amount ,amountOut);
+        currentEpoch++;
+
+        emit Swap(baseTokenAddress, amount, targetTokenAddress, amountOut, msg.sender);
 
     }
 
     /*
-    * @notice Remove all assets from Smart Contract in case funds being suck inside.
+    * @notice Remove all ETH from Smart Contract in case funds being suck inside.
     */
-    function unstuck() public payable {
+    function unstuckETH() public payable {
         recipient.transfer(address(this).balance);
-        USDC_TOKEN.transfer(recipient, USDC_TOKEN.balanceOf(address(this)));
     }
+
+    /*
+    * @notice Remove all base asset from Smart Contract in case funds being suck inside.
+    */
+    function unstuckBase() public payable {
+        BASE_TOKEN.transfer(recipient, BASE_TOKEN.balanceOf(address(this)));
+    }
+
+    /*
+    * @notice Remove all target asset from Smart Contract in case funds being suck inside.
+    */
+    function unstuckTarget() public payable {
+        TARGET_TOKEN.transfer(recipient, TARGET_TOKEN.balanceOf(address(this)));
+    }
+    
+    
+
 }
