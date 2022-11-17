@@ -1,4 +1,3 @@
-// contracts/MyContract.sol
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 pragma abicoder v2;
@@ -41,19 +40,19 @@ contract DCA {
     ////////////
 
     event DCACreated(
-        address recipient,
+        address indexed recipient,
         uint256 interval,
         uint256 amount,
-        address baseTokenAddress,
-        address targetTokenAddress
+        address indexed baseTokenAddress,
+        address indexed targetTokenAddress
     );
 
     event Swap(
-        address baseTokenAddress,
+        address indexed baseTokenAddress,
         uint256 amountIn,
-        address targetTokenAddress,
+        address indexed targetTokenAddress,
         uint256 amountOut,
-        address executedBy
+        address indexed executedBy
     );
 
     ///////////////
@@ -120,6 +119,7 @@ contract DCA {
         BASE_TOKEN.approve(address(swapRouter), BASE_TOKEN.totalSupply());
 
         emit DCACreated(recipient, swapInterval, amount, baseTokenAddress, targetTokenAddress);
+
     }
 
     /*
