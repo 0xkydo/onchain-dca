@@ -39,14 +39,6 @@ contract DCA {
     // Events //
     ////////////
 
-    event DCACreated(
-        address indexed recipient,
-        uint256 interval,
-        uint256 amount,
-        address indexed baseTokenAddress,
-        address indexed targetTokenAddress
-    );
-
     event Swap(
         address indexed baseTokenAddress,
         uint256 amountIn,
@@ -117,8 +109,6 @@ contract DCA {
 
         // Approve DCA bot to interact with Uniswap router.
         BASE_TOKEN.approve(address(swapRouter), BASE_TOKEN.totalSupply());
-
-        emit DCACreated(recipient, swapInterval, amount, baseTokenAddress, targetTokenAddress);
 
     }
 

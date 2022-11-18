@@ -8,6 +8,17 @@ contract DCAFactory{
 
     address[] public DCABotRecipient;
 
+    event DCACreated(
+        address indexed funder,
+        address indexed recipient,
+        address indexed bot,
+        address baseToken,
+        address targetToken,
+        uint256 amount,
+        uint256 interval,
+        uint256 maxEpoch
+    );
+
     /*
     * @notice documentation copied from DCA.sol's constructor. Create function creates a new instance of DCA and stores address.
     * @param _amount: amount of token to sell.
@@ -48,6 +59,17 @@ contract DCAFactory{
         // Store new DCA Bot address and recipient for the bot.
         DCABots.push(newDCA);
         DCABotRecipient.push(_recipient);
+
+        emit DCACreated(
+            _funder,
+            _recipient,
+            address(newDCA),
+            _baseToken,
+            _targetToken,
+            _amount,
+            _interval,
+            _maxEpoch
+        );
 
     }
 
