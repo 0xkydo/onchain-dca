@@ -73,6 +73,7 @@ contract DCAFactory{
 
     }
 
+    // Query length of total DCA bot length. For front end purposes.
     function totalDCALength() external view returns (uint256) {
         return DCABots.length;
     }

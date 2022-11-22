@@ -1,7 +1,7 @@
 # On-chain DCA Bot
 
 ## Goals
-A noncustodial mechanism to swap any ERC20 to another ERC20. 
+A noncustodial mechanism to DCA any ERC20 to another ERC20. 
 
 ## Requirements
 1. The fund should always sit in a ledger ( $EOA_1$ ). 

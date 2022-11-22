@@ -14,20 +14,18 @@ contract DCA {
     address public immutable baseTokenAddress;
     address public immutable targetTokenAddress;
     address payable public immutable recipient;
-    uint256 public amount;
+    uint256 public immutable amount;
     uint24 public immutable poolFee;
-    
-    uint256 public maxEpoch;
-    uint256 public currentEpoch;
-
+    uint256 public immutable maxEpoch;
     uint256 public immutable swapInterval;
-    uint256 public swapTime;
 
     IERC20 public immutable BASE_TOKEN;
     IERC20 public immutable TARGET_TOKEN;
 
     ISwapRouter public immutable swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-    
+
+    uint256 public currentEpoch;
+    uint256 public swapTime;
 
     ///////////////////////
     // Private Variables //
@@ -51,9 +49,10 @@ contract DCA {
     // Modifiers //
     ///////////////
 
+    // Check for the interval between 
     modifier canSwap{
-        require(block.timestamp >= swapTime);
-        require(currentEpoch <= maxEpoch);
+        require(block.timestamp >= swapTime + swapInterval, "ERROR: TIME LIMIT");
+        require(currentEpoch <= (maxEpoch-1), "ERROR: EPOCH LIMIT");
         _;
     }
 
@@ -137,6 +136,9 @@ contract DCA {
 
         amountOut = swapRouter.exactInputSingle(params);
 
+        // Set last swap time to current.
+        swapTime = block.timestamp;
+        // Increment current epoch number.
         currentEpoch++;
 
         emit Swap(baseTokenAddress, amount, targetTokenAddress, amountOut, msg.sender);
@@ -153,17 +155,9 @@ contract DCA {
     /*
     * @notice Remove all base asset from Smart Contract in case funds being suck inside.
     */
-    function unstuckBase() public payable {
-        BASE_TOKEN.transfer(recipient, BASE_TOKEN.balanceOf(address(this)));
+    function unstuckERC(address erc20) public payable {
+        IERC20(erc20).transfer(recipient, IERC20(erc20).balanceOf(address(this)));
     }
-
-    /*
-    * @notice Remove all target asset from Smart Contract in case funds being suck inside.
-    */
-    function unstuckTarget() public payable {
-        TARGET_TOKEN.transfer(recipient, TARGET_TOKEN.balanceOf(address(this)));
-    }
-    
     
 
 }
